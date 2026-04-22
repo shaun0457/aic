@@ -18,6 +18,14 @@ SHELL ["/bin/bash", "-c"]
 RUN --mount=type=cache,target=/root/.cache/rattler/cache --mount=type=cache,target=/ws_aic/src/aic/.pixi/build \
     cd /ws_aic/src/aic && pixi install --locked
 
+# Copy trained checkpoint into the image (optional: only present after training).
+# Place your lerobot-train output under checkpoint/ at the repo root, then
+# docker build will embed it at /checkpoint inside the container.
+# Example:
+#   outputs/train/act_aic/checkpoints/last/pretrained_model/ -> checkpoint/
+# If the directory doesn't exist the COPY is silently skipped (BuildKit).
+COPY checkpoint* /checkpoint/
+
 WORKDIR /ws_aic/src/aic
 COPY --chmod=755 <<"EOF" /entrypoint.sh
 #!/bin/bash
@@ -57,4 +65,7 @@ exec pixi run --as-is ros2 run aic_model aic_model "$@"
 EOF
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["--ros-args", "-p", "policy:=aic_example_policies.ros.CheatCode", "-p", "use_sim_time:=true"]
+# Default: use local ACT checkpoint at /checkpoint.
+# For dev/testing without a trained model, override with:
+#   docker run ... --ros-args -p policy:=aic_example_policies.ros.CheatCode
+CMD ["--ros-args", "-p", "policy:=aic_example_policies.ros.RunLocalACT", "-p", "use_sim_time:=true", "-p", "policy_checkpoint_dir:=/checkpoint"]
