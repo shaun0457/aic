@@ -1,0 +1,22 @@
+# docker-compose override for batch recording with CheatCodeRecorder.
+#
+# Usage:
+#   sudo docker compose -f docker/docker-compose.yaml \
+#                       -f docker/docker-compose.record.yaml \
+#                       up -d eval
+#
+# This mounts recording_config.yaml from the repo root into the container
+# and switches to shutdown_on_aic_engine_exit:=false so the container
+# stays up after the engine finishes (let the policy node exit cleanly first).
+
+services:
+  eval:
+    command: >
+      gazebo_gui:=false
+      launch_rviz:=false
+      ground_truth:=true
+      start_aic_engine:=true
+      shutdown_on_aic_engine_exit:=false
+      aic_engine_config_file:=/recording_config.yaml
+    volumes:
+      - ../recording_config.yaml:/recording_config.yaml:ro
