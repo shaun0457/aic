@@ -48,22 +48,25 @@ def main():
     # Import here so the script fails loudly if lerobot is missing
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
+    # Camera: 1152×1024 px scaled by 0.25 → W=288, H=256. Shape is (H, W, C).
+    IMG_SHAPE = (256, 288, 3)
+
     features = {
         "observation.state": {"dtype": "float32", "shape": (26,), "names": None},
         "action": {"dtype": "float32", "shape": (7,), "names": None},
         "observation.images.left_camera": {
             "dtype": "image",
-            "shape": (288, 256, 3),  # 1152*0.25 x 1024*0.25
+            "shape": IMG_SHAPE,
             "names": ["height", "width", "channel"],
         },
         "observation.images.center_camera": {
             "dtype": "image",
-            "shape": (288, 256, 3),
+            "shape": IMG_SHAPE,
             "names": ["height", "width", "channel"],
         },
         "observation.images.right_camera": {
             "dtype": "image",
-            "shape": (288, 256, 3),
+            "shape": IMG_SHAPE,
             "names": ["height", "width", "channel"],
         },
     }
@@ -101,12 +104,10 @@ def main():
                 if img_path.exists():
                     frame[f"observation.images.{cam}_camera"] = np.array(Image.open(img_path))
                 else:
-                    frame[f"observation.images.{cam}_camera"] = np.zeros((256, 288, 3), dtype=np.uint8)
+                    frame[f"observation.images.{cam}_camera"] = np.zeros(IMG_SHAPE, dtype=np.uint8)
             dataset.add_frame(frame)
 
-        dataset.save_episode(task=meta.get("task", "cable insertion"))
-
-    dataset.consolidate(run_compute_stats=True)
+        dataset.save_episode()
 
     print(f"\nDataset saved to {dataset.root}")
 

@@ -36,12 +36,11 @@ Dataset layout (per episode):
       right/  TTTTT.jpg
       meta.json           -- task, success, fps, n_frames
 
-Run 100 episodes by looping `docker exec` calls (see run_batch.sh).
+Run 100 episodes via run_batch_record.sh (single container launch, N-trial config).
 """
 
 import json
 import os
-import time
 from pathlib import Path
 
 import cv2

@@ -9,7 +9,7 @@
 #   OUTPUT_DIR : dataset path inside container (default: /tmp/aic_dataset)
 #
 # After recording, copy dataset out:
-#   sudo docker cp aic-aic-eval-1:/tmp/aic_dataset ./aic_dataset
+#   sudo docker cp aic-eval-1:/tmp/aic_dataset ./aic_dataset
 #
 # Then convert to lerobot format:
 #   pixi run python scripts/convert_to_lerobot.py \
@@ -20,7 +20,7 @@ set -euo pipefail
 
 N_REPEATS=${1:-37}        # 37 × 3 = 111 episodes
 OUTPUT_DIR=${2:-/tmp/aic_dataset}
-CONTAINER=aic-aic-eval-1
+CONTAINER=aic-eval-1
 
 TOTAL=$((N_REPEATS * 3))
 echo "=== Batch Recording Setup ==="

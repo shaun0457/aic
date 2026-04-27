@@ -90,7 +90,7 @@ sudo docker exec -it aic-aic-eval-1 bash -c "
 "
 
 # Inspect output
-sudo docker exec aic-aic-eval-1 ls -la /tmp/aic_dataset/
+sudo docker exec aic-eval-1 ls -la /tmp/aic_dataset/
 ```
 
 ### 2. Full Batch (111 episodes)
@@ -102,7 +102,7 @@ bash scripts/run_batch_record.sh 37 /tmp/aic_dataset
 ### 3. Copy & Convert
 
 ```bash
-sudo docker cp aic-aic-eval-1:/tmp/aic_dataset ./aic_dataset
+sudo docker cp aic-eval-1:/tmp/aic_dataset ./aic_dataset
 
 pixi run python scripts/convert_to_lerobot.py \
     --src ./aic_dataset \
