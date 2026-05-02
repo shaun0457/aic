@@ -16,9 +16,25 @@ COPY pixi_env_setup.sh /ws_aic/src/aic/
 
 SHELL ["/bin/bash", "-c"]
 RUN --mount=type=cache,target=/root/.cache/rattler/cache --mount=type=cache,target=/ws_aic/src/aic/.pixi/build \
-    cd /ws_aic/src/aic && pixi install --locked
+    cd /ws_aic/src/aic && pixi install --frozen
+
+# Override installed packages with our source (pixi install uses cached versions)
+RUN cp -r /ws_aic/src/aic/aic_example_policies/aic_example_policies/. \
+    /ws_aic/src/aic/.pixi/envs/default/lib/python3.12/site-packages/aic_example_policies/ && \
+    cp -r /ws_aic/src/aic/aic_model/aic_model/. \
+    /ws_aic/src/aic/.pixi/envs/default/lib/python3.12/site-packages/aic_model/
 
 WORKDIR /ws_aic/src/aic
+
+# Pre-download model weights so container starts without network delay
+RUN /ws_aic/src/aic/.pixi/envs/default/bin/python -c "from huggingface_hub import snapshot_download; snapshot_download('shaun0457/act_aic', allow_patterns=['config.json', 'model.safetensors', '*.safetensors'])"
+
+# Pre-download ResNet18 backbone (required by ACTPolicy at init time)
+RUN /ws_aic/src/aic/.pixi/envs/default/bin/python -c "import torchvision; torchvision.models.resnet18(weights='ResNet18_Weights.IMAGENET1K_V1')"
+
+# After download, force offline mode so runtime never hits the network
+ENV HF_HUB_OFFLINE=1
+
 COPY --chmod=755 <<"EOF" /entrypoint.sh
 #!/bin/bash
 set -e

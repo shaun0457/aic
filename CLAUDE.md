@@ -102,7 +102,7 @@ All challenge documentation is in `docs/` (18 files). Key files:
 - `docs/submission_guidelines.md` — packaging & submission
 
 
-## Current Progress（截至 2026-03-12）
+## Current Progress（截至 2026-04-30）
 
 ### CheatCode Evaluation — 3/3 全部成功 ✅
 
@@ -112,13 +112,21 @@ All challenge documentation is in `docs/` (18 files). Key files:
 | Task 2 | SFP → nic_card_mount_1 / sfp_port_0 | -11.6mm, +38.3mm | ✅ True |
 | Task 3 | SC  → sc_port_1 / sc_port_base     | -104mm, +28mm   | ✅ True |
 
+### 訓練資料集 ✅
+
+- **111 個 episodes** 已錄製（CheatCodeRecorder）
+- 原始資料備份：`~/ws_aic/src/aic/aic_dataset_partial/`（3GB，episode_000000~episode_000110）
+- HuggingFace：`shaun0457/aic_cheatcode_demos`（private，tar 格式）
+- 隊友下載：`hf download shaun0457/aic_cheatcode_demos --repo-type=dataset --local-dir ./aic_dataset`
+
 ### TODO（按優先順序）
 
-- [ ] 用 CheatCode 錄 100+ 次 ROS bag（訓練資料）
-- [ ] 設定 RunPod 雲端訓練環境
+- [x] 用 CheatCode 錄 100+ 次 ROS bag（訓練資料）→ 111 episodes ✅
+- [ ] 把 raw episodes 轉換為 lerobot 格式（`scripts/convert_to_lerobot.py`，需要 lerobot 環境）
+- [ ] 設定 RunPod 雲端訓練環境（在 RunPod 上下載、轉換、訓練一次完成）
 - [ ] 用 lerobot-train 訓練 ACT 模型
 - [ ] 把 model weights 塞回 Docker image → 本地測試
-- [ ] 拿 Intrinsic auth token，提交到 registry
+- [ ] 拿 Intrinsic auth token，提交到 registry（截止 2026/05/15）
 
 ---
 

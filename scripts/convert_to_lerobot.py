@@ -38,7 +38,7 @@ def main():
     args = parse_args()
     src = args.src
 
-    episodes = sorted(src.glob("episode_*"))
+    episodes = sorted(p for p in src.glob("episode_*") if p.is_dir())
     if not episodes:
         print(f"No episodes found in {src}")
         return
@@ -94,10 +94,12 @@ def main():
 
         print(f"  {ep_dir.name}: {T} frames  task={meta.get('task','?')}  success={meta.get('success')}")
 
+        task_name = meta.get("task", "cable insertion")
         for t in range(T):
             frame = {
                 "observation.state": states[t],
                 "action": actions[t],
+                "task": task_name,
             }
             for cam in ("left", "center", "right"):
                 img_path = ep_dir / cam / f"{t:05d}.jpg"
