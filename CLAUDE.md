@@ -102,7 +102,7 @@ All challenge documentation is in `docs/` (18 files). Key files:
 - `docs/submission_guidelines.md` — packaging & submission
 
 
-## Current Progress（截至 2026-04-30）
+## Current Progress（截至 2026-05-02）
 
 ### CheatCode Evaluation — 3/3 全部成功 ✅
 
@@ -115,17 +115,38 @@ All challenge documentation is in `docs/` (18 files). Key files:
 ### 訓練資料集 ✅
 
 - **111 個 episodes** 已錄製（CheatCodeRecorder）
-- 原始資料備份：`~/ws_aic/src/aic/aic_dataset_partial/`（3GB，episode_000000~episode_000110）
-- HuggingFace：`shaun0457/aic_cheatcode_demos`（private，tar 格式）
-- 隊友下載：`hf download shaun0457/aic_cheatcode_demos --repo-type=dataset --local-dir ./aic_dataset`
+- 原始資料備份：`~/ws_aic/src/aic/aic_dataset_partial/`（8.7GB，含 tar）
+- HuggingFace dataset：`shaun0457/aic_cheatcode_demos`（private，tar 格式）
+- lerobot 格式：`~/.cache/huggingface/lerobot/shaun0457/aic_cheatcode_demos/`（7.3GB，110 episodes）
+- 轉換指令：`python3 scripts/convert_to_lerobot.py --src aic_dataset_partial --repo_id shaun0457/aic_cheatcode_demos`
+
+### ACT 模型訓練 ✅
+
+- **HuggingFace model：** `shaun0457/act_aic`（100K steps，final loss ~0.065）
+- 訓練在 GCP VM（Tesla T4, 15GB VRAM），約 6.5 小時
+- lerobot-train 指令（不用 pixi，直接用系統 lerobot）：
+```bash
+lerobot-train \
+  --dataset.repo_id=shaun0457/aic_cheatcode_demos \
+  --policy.type=act \
+  --policy.repo_id=shaun0457/act_aic \
+  --output_dir=outputs/train/act_aic \
+  --policy.device=cuda
+```
+
+### RunACT Docker 測試 ✅
+
+- Image：`my-solution:v1`（本地 build）
+- 測試結果：**總分 107.96 / ~300**（Trial 1: 39.8, Trial 2: 42.8, Trial 3: 25.4）
+- 跑法見下方 Working Docker Workflow
 
 ### TODO（按優先順序）
 
-- [x] 用 CheatCode 錄 100+ 次 ROS bag（訓練資料）→ 111 episodes ✅
-- [ ] 把 raw episodes 轉換為 lerobot 格式（`scripts/convert_to_lerobot.py`，需要 lerobot 環境）
-- [ ] 設定 RunPod 雲端訓練環境（在 RunPod 上下載、轉換、訓練一次完成）
-- [ ] 用 lerobot-train 訓練 ACT 模型
-- [ ] 把 model weights 塞回 Docker image → 本地測試
+- [x] 用 CheatCode 錄 100+ 次 ROS bag ✅
+- [x] 轉換為 lerobot 格式 ✅
+- [x] 訓練 ACT 模型（GCP VM） ✅
+- [x] RunACT Docker image build + 測試通過 ✅
+- [ ] 繼續優化分數（更長推理時間、更多訓練）
 - [ ] 拿 Intrinsic auth token，提交到 registry（截止 2026/05/15）
 
 ---
@@ -133,21 +154,35 @@ All challenge documentation is in `docs/` (18 files). Key files:
 ## Working Docker Workflow
 
 > ⚠️ **不要用 docker-compose 跑 model service**
-> Zenoh 跨 container 連不起來。正確做法是在 eval container 內直接跑 policy。
+> Zenoh 跨 container 連不起來。正確做法：eval container 用 docker-compose，model container 用 `--network container:aic-eval-1` 共享網路。
 
 ```bash
-# 1. 啟動 eval container（背景）
+# 1. 啟動 eval container
 cd ~/ws_aic/src/aic
 sudo docker compose -f docker/docker-compose.yaml up -d eval
 
-# 2. 在 eval container 裡跑 policy
-sudo docker exec -it aic-eval-1 bash -c   "source /ws_aic/install/setup.bash &&    RMW_IMPLEMENTATION=rmw_zenoh_cpp ros2 run aic_model aic_model    --ros-args -p use_sim_time:=true -p policy:=aic_example_policies.ros.CheatCode"
+# 2a. 跑 CheatCode（在 eval container 內，不需要 torch）
+sudo docker exec -it aic-eval-1 bash -c \
+  "source /ws_aic/install/setup.bash && \
+   RMW_IMPLEMENTATION=rmw_zenoh_cpp ros2 run aic_model aic_model \
+   --ros-args -p use_sim_time:=true -p policy:=aic_example_policies.ros.CheatCode"
+
+# 2b. 跑 RunACT（用自訂 image，共享 eval 網路）
+sudo docker rm -f aic-model-1 2>/dev/null
+sudo docker run --rm -d \
+  --name aic-model-1 \
+  --network container:aic-eval-1 \
+  --gpus all \
+  -e AIC_ROUTER_ADDR=localhost:7447 \
+  my-solution:v1 \
+  --ros-args -p use_sim_time:=true -p policy:=aic_example_policies.ros.RunACT
 
 # 3. 看評分
-sudo docker logs aic-eval-1 2>&1 | grep -E "score|trial|success|insert|result" | tail -20
+sudo docker logs aic-eval-1 2>&1 | grep -E "score|trial|success|result" | tail -20
+sudo docker logs aic-model-1 2>&1 | tail -20
 
-# 4. 開 RViz 視覺化（另開 terminal）
-sudo docker run --rm   --network container:aic-eval-1   --gpus all   --entrypoint bash   -e DISPLAY=:0   -e WAYLAND_DISPLAY=wayland-0   -e XDG_RUNTIME_DIR=/mnt/wslg/runtime-dir   -e RMW_IMPLEMENTATION=rmw_zenoh_cpp   -e ZENOH_CONFIG_OVERRIDE='transport/shared_memory/enabled=false'   --volume /tmp/.X11-unix:/tmp/.X11-unix   --volume /mnt/wslg:/mnt/wslg   ghcr.io/intrinsic-dev/aic/aic_eval:latest   -c "source /ws_aic/install/setup.bash &&       ros2 run rviz2 rviz2 -d /ws_aic/install/share/aic_bringup/rviz/aic.rviz"
+# 4. Build model image
+docker build -f docker/aic_model/Dockerfile -t my-solution:v1 .
 ```
 
 ---
@@ -164,9 +199,14 @@ cd ~/ws_aic/src/aic
 pixi run lerobot-record   --robot.type=aic_controller --robot.id=aic   --teleop.type=aic_keyboard_ee --teleop.id=aic   --dataset.repo_id=<your-hf-username>/aic_dataset   --dataset.single_task="cable insertion"   --dataset.push_to_hub=false
 ```
 
-**訓練指令（RunPod 上跑）：**
+**訓練指令（GCP VM 或任何有 GPU 的機器，直接用系統 lerobot）：**
 ```bash
-pixi run lerobot-train   --dataset.repo_id=<your-hf-username>/aic_dataset   --policy.type=act   --output_dir=outputs/train/act_aic   --policy.device=cuda
+lerobot-train \
+  --dataset.repo_id=shaun0457/aic_cheatcode_demos \
+  --policy.type=act \
+  --policy.repo_id=shaun0457/act_aic \
+  --output_dir=outputs/train/act_aic \
+  --policy.device=cuda
 ```
 
 ---
@@ -193,11 +233,13 @@ pixi run lerobot-train   --dataset.repo_id=<your-hf-username>/aic_dataset   --po
 
 | 問題 | 原因 | 解法 |
 |------|------|------|
-| Zenoh 跨 container 連不起來 | docker-compose model service 網路隔離 | 改用 `docker exec` 在 eval container 內跑 policy |
+| Zenoh 跨 container 連不起來 | docker-compose model service 網路隔離 | RunACT 用 `docker run --network container:aic-eval-1`（CheatCode 仍用 docker exec）|
 | RViz 在 `docker exec` 裡沒 display | socket 沒掛進 container | 用 `docker run --network container:aic-eval-1` 另開 |
-| `pixi install` WSL 本地失敗 | pixi-build-ros backend 問題 | 改用純 Docker 工作流 |
+| `pixi install --locked` Docker build 失敗 | lock file 在 macOS 生成，osx-arm64 依賴衝突 | 改用 `--frozen`；build 後 cp source 覆蓋 site-packages |
+| pixi site-packages 是舊版本 | pixi install 用 conda 快取，不用本地 source | Dockerfile 加 `cp -r aic_example_policies/. .pixi/envs/.../site-packages/aic_example_policies/` |
+| RunACT module import 慢 15 秒 → GetState timeout | `from aic_model.policy import Policy` 觸發大量 ROS message import | RunACT 不繼承 Policy，改用輕量 `_LightPolicy` stub，所有 heavy import 移入 `__init__` |
+| RunACT 網路請求失敗（isolated network）| `snapshot_download` + ResNet18 backbone 嘗試連 HuggingFace | Dockerfile 預下載所有 weights；hardcode 快取路徑；`ENV HF_HUB_OFFLINE=1` |
 | container 重啟後 DISPLAY 消失 | env var 沒傳進去 | `sudo docker exec -it -e DISPLAY=$DISPLAY aic-eval-1 bash` |
-| RunACT 跑 30 秒就 return True | 設計如此 | 訓練好的模型才能真正判斷插沒插成功 |
 
 ---
 
@@ -213,8 +255,26 @@ pixi run lerobot-train   --dataset.repo_id=<your-hf-username>/aic_dataset   --po
 
 ## Environment
 
-- **GPU:** NVIDIA GeForce 6GB VRAM, CUDA 12.0, WSL2 GPU passthrough
+- **本地 GPU:** NVIDIA GeForce 6GB VRAM, CUDA 12.0, WSL2 GPU passthrough（VRAM 不足訓練）
+- **GCP VM GPU:** Tesla T4 15GB VRAM, CUDA 12.8（用於 ACT 訓練 + Docker build + 測試）
 - **Deadline:** 資格賽截止 **2026/05/15**
-- **雲端訓練:** RunPod（本地 VRAM 不足）
 - **視覺化:** RViz（WSL）/ Foxglove Studio（Windows，尚未安裝）
 - **隊友共享:** 共享 git repo，隊友自行 `docker compose build model`
+
+### 遷移 GCP → 本地
+
+GCP VM 太貴，需搬遷：
+```bash
+# 儲存 Docker image 為 tar（在 GCP VM 上）
+docker save my-solution:v1 | gzip > my-solution-v1.tar.gz
+
+# 傳回本地（在本地執行）
+gcloud compute scp <vm-name>:~/my-solution-v1.tar.gz .
+
+# 本地載入
+docker load < my-solution-v1.tar.gz
+
+# 或 push 到 Docker Hub（在 GCP VM 上）
+docker tag my-solution:v1 <dockerhub-user>/my-solution:v1
+docker push <dockerhub-user>/my-solution:v1
+```
